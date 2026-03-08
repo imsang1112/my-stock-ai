@@ -1,0 +1,5 @@
+streamlit
+FinanceDataReader
+prophet
+matplotlib
+pandas
