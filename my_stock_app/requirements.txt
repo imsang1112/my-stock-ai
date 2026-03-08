@@ -1,5 +1,8 @@
 streamlit
 FinanceDataReader
 prophet
-matplotlib
 pandas
+matplotlib
+plotly
+
+
