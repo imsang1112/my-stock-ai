@@ -1,8 +1,7 @@
 streamlit
 FinanceDataReader
-prophet
+statsmodels
 pandas
-matplotlib
-plotly
+
 
 
