@@ -1,65 +1,40 @@
 import streamlit as st
 import FinanceDataReader as fdr
-from prophet import Prophet
+import pandas as pd
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-# 앱 제목 및 레이아웃 설정
-st.set_page_config(page_title="AI 주가 예측 봇", layout="wide")
-st.title("📈 AI 주가 변동 예측 서비스")
-st.markdown("종목 코드를 입력하면 AI(Prophet)가 향후 30일간의 추세를 분석합니다.")
+st.set_page_config(page_title="간편 AI 주가 예측", layout="wide")
+st.title("📈 초간편 주가 분석 봇")
 
-# 사이드바: 입력 섹션
 with st.sidebar:
-    st.header("🔍 설정")
-    target_code = st.text_input("종목 코드 입력", value="005930", help="삼성전자는 005930, 현대차는 005380 등을 입력하세요.")
-    period = st.slider("예측 기간 (일)", 7, 90, 30)
+    target_code = st.text_input("종목 코드 (예: 005930)", value="005930")
+    period = st.slider("예측 기간 (일)", 7, 30, 14)
     analyze_btn = st.button("분석 시작")
 
-# 분석 로직
 if analyze_btn:
     try:
-        with st.spinner('데이터 분석 중... 잠시만 기다려 주세요.'):
-            # 1. 데이터 불러오기 (최근 2년)
-            end_date = datetime.now().strftime('%Y-%m-%d')
-            start_date = (datetime.now() - timedelta(days=365*2)).strftime('%Y-%m-%d')
-            df = fdr.DataReader(target_code, start_date, end_date)
-
-            if df.empty:
-                st.error("종목 코드를 확인해 주세요. 데이터를 가져올 수 없습니다.")
-            else:
-                # 2. 데이터 전처리
-                data = df[['Close']].reset_index()
-                data.columns = ['ds', 'y']
-
-                # 3. AI 모델 학습 및 예측
-                model = Prophet(daily_seasonality=True)
-                model.fit(data)
-                future = model.make_future_dataframe(periods=period)
-                forecast = model.predict(future)
-
-                # 4. 결과 화면 구성
-                col1, col2 = st.columns([2, 1])
-
-                with col1:
-                    st.subheader(f"📊 [{target_code}] 주가 예측 차트")
-                    fig = model.plot(forecast)
-                    st.pyplot(fig)
-
-                with col2:
-                    st.subheader("📋 주요 예측 수치")
-                    last_price = df['Close'].iloc[-1]
-                    pred_price = forecast['yhat'].iloc[-1]
-                    diff = pred_price - last_price
-                    
-                    st.metric("현재 종가", f"{last_price:,.0f}원")
-                    st.metric(f"{period}일 후 예상", f"{pred_price:,.0f}원", f"{diff:,.0f}원")
-                    
-                    st.write("**상세 데이터 (최근 5일)**")
-                    st.dataframe(forecast[['ds', 'yhat']].tail(5).rename(columns={'ds':'날짜', 'yhat':'예측가'}))
-
+        # 데이터 가져오기
+        df = fdr.DataReader(target_code, datetime.now() - timedelta(days=365), datetime.now())
+        
+        if not df.empty:
+            # AI 모델링 (지수 평활법 - 매우 가볍고 빠름)
+            model = ExponentialSmoothing(df['Close'], trend='add', seasonal=None).fit()
+            forecast = model.forecast(period)
+            
+            # 날짜 생성
+            last_date = df.index[-1]
+            forecast_dates = [last_date + timedelta(days=i) for i in range(1, period + 1)]
+            
+            # 시각화
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(df.index[-60:], df['Close'].tail(60), label='Past') # 최근 60일 데이터
+            ax.plot(forecast_dates, forecast, label='Predicted', linestyle='--', color='red')
+            ax.legend()
+            st.pyplot(fig)
+            
+            st.success(f"예측 완료! {period}일 뒤 예상 종가: {forecast.iloc[-1]:,.0f}원")
     except Exception as e:
-        st.error(f"오류가 발생했습니다: {e}")
+        st.error(f"오류 발생: {e}")
 
-else:
-    st.info("왼쪽 사이드바에서 종목 코드를 입력하고 '분석 시작' 버튼을 눌러주세요.")
